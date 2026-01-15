@@ -8,17 +8,9 @@ import (
 	"log"
 	"os"
 	"strings"
-)
 
-type Har struct {
-	Log struct {
-		Entries []struct {
-			Request struct {
-				URL string `json:"url"`
-			} `json:"request"`
-		} `json:"entries"`
-	} `json:"log"`
-}
+	"github.com/bjluckow/harchiver/pkg/har"
+)
 
 func main() {
 	var (
@@ -110,7 +102,7 @@ func extractURLsFromHAR(path string, w *bufio.Writer) error {
 	}
 	defer f.Close()
 
-	var har Har
+	var har har.HttpArchive
 	if err := json.NewDecoder(f).Decode(&har); err != nil {
 		return fmt.Errorf("decode: %w", err)
 	}
