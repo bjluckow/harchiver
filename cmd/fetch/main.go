@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bjluckow/harlequin/internal/browser"
+	"github.com/bjluckow/harchiver/internal/browser"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-module github.com/bjluckow/harlequin
+module github.com/bjluckow/harchiver
 
 go 1.25.4
 
