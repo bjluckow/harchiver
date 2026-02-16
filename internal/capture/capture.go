@@ -23,14 +23,13 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("no URLs provided")
 	}
 
-	rec := cdp.NewRecorder()
-	rec.Listen(ctx)
-
 	// Enable network tracking
-	// MUST occur between rec.Listen() and any navigations
 	if err := chromedp.Run(ctx, network.Enable()); err != nil {
 		return fmt.Errorf("enable network: %w", err)
 	}
+
+	rec := cdp.NewRecorder()
+	rec.Listen(ctx)
 
 	for _, u := range opts.URLs {
 		if err := chromedp.Run(ctx,

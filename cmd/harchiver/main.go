@@ -61,7 +61,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("browser: %v", err)
 	}
-	defer bc.Cancefmt.l()
+	defer bc.Cancel()
 
 	var w io.Writer = os.Stdout
 	if *output != "" {

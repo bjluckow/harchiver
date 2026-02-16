@@ -70,6 +70,8 @@ func (r *Recorder) onRequest(e *network.EventRequestWillBeSent) {
 			Text:     text.String(),
 		}
 	}
+
+	r.requests[e.RequestID] = entry
 }
 
 func (r *Recorder) onResponse(e *network.EventResponseReceived) {
