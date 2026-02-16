@@ -3,3 +3,8 @@ services:
     image: chromedp/headless-shell
     ports:
       - "9222:9222"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9222/json/version"]
+      interval: 2s
+      timeout: 5s
+      retries: 3
