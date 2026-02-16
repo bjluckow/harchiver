@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/bjluckow/harchiver/internal/cdp"
-	"github.com/bjluckow/harchiver/pkg/har"
+	hartype "github.com/bjluckow/harchiver/pkg/har-type"
+	harutil "github.com/bjluckow/harchiver/pkg/har-util"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 )
@@ -40,13 +41,13 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 
-	archive := &har.HttpArchive{
-		Log: har.Log{
+	archive := &hartype.HttpArchive{
+		Log: hartype.Log{
 			Entries: rec.Entries(),
 		},
 	}
 
-	if err := har.Write(archive, opts.Output); err != nil {
+	if err := harutil.Write(archive, opts.Output); err != nil {
 		return fmt.Errorf("write HAR: %w", err)
 	}
 

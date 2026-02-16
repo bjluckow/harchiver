@@ -1,4 +1,4 @@
-package har
+package hartype
 
 // TODO: Maybe good to generate this file with a script using JSON schema .har specs?
 

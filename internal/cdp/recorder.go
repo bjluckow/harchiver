@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bjluckow/harchiver/pkg/har"
+	hartype "github.com/bjluckow/harchiver/pkg/har-type"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 )
@@ -15,13 +15,13 @@ import (
 // Recorder listens to CDP network events and builds HAR entries
 type Recorder struct {
 	mu       sync.Mutex
-	requests map[network.RequestID]*har.Entry
-	entries  []*har.Entry
+	requests map[network.RequestID]*hartype.Entry
+	entries  []*hartype.Entry
 }
 
 func NewRecorder() *Recorder {
 	return &Recorder{
-		requests: make(map[network.RequestID]*har.Entry),
+		requests: make(map[network.RequestID]*hartype.Entry),
 	}
 }
 
@@ -45,15 +45,15 @@ func (r *Recorder) onRequest(e *network.EventRequestWillBeSent) {
 	defer r.mu.Unlock()
 
 	headers := convertHeaders(e.Request.Headers)
-	entry := &har.Entry{
+	entry := &hartype.Entry{
 		StartedDateTime: e.WallTime.Time().UTC().Format(time.RFC3339Nano),
-		Request: har.Request{
+		Request: hartype.Request{
 			Method:      e.Request.Method,
 			URL:         e.Request.URL,
 			HTTPVersion: "HTTP/1.1",
 			Headers:     headers,
 		},
-		Response: har.Response{
+		Response: hartype.Response{
 			Status: -1, // sentinel until we get the response
 		},
 	}
@@ -65,7 +65,7 @@ func (r *Recorder) onRequest(e *network.EventRequestWillBeSent) {
 		}
 
 		mimeType, _ := headerValue(e.Request.Headers, "content-type")
-		entry.Request.PostData = &har.PostData{
+		entry.Request.PostData = &hartype.PostData{
 			MimeType: mimeType,
 			Text:     text.String(),
 		}
@@ -83,17 +83,17 @@ func (r *Recorder) onResponse(e *network.EventResponseReceived) {
 		return
 	}
 
-	headers := make([]har.Header, 0, len(e.Response.Headers))
+	headers := make([]hartype.Header, 0, len(e.Response.Headers))
 	for k, v := range e.Response.Headers {
-		headers = append(headers, har.Header{Name: k, Value: v.(string)})
+		headers = append(headers, hartype.Header{Name: k, Value: v.(string)})
 	}
 
-	entry.Response = har.Response{
+	entry.Response = hartype.Response{
 		Status:      int(e.Response.Status),
 		StatusText:  e.Response.StatusText,
 		HTTPVersion: e.Response.Protocol,
 		Headers:     headers,
-		Content: &har.Content{
+		Content: &hartype.Content{
 			Size:     int64(e.Response.EncodedDataLength),
 			MimeType: e.Response.MimeType,
 		},
@@ -134,21 +134,21 @@ func (r *Recorder) onLoadingFailed(e *network.EventLoadingFailed) {
 }
 
 // Returns collected HAR entries
-func (r *Recorder) Entries() []har.Entry {
+func (r *Recorder) Entries() []hartype.Entry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	result := make([]har.Entry, len(r.entries))
+	result := make([]hartype.Entry, len(r.entries))
 	for i, e := range r.entries {
 		result[i] = *e
 	}
 	return result
 }
 
-func convertHeaders(h network.Headers) []har.Header {
-	out := make([]har.Header, 0, len(h))
+func convertHeaders(h network.Headers) []hartype.Header {
+	out := make([]hartype.Header, 0, len(h))
 	for k, v := range h {
-		out = append(out, har.Header{Name: k, Value: v.(string)})
+		out = append(out, hartype.Header{Name: k, Value: v.(string)})
 	}
 	return out
 }
