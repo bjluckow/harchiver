@@ -55,7 +55,7 @@ func FetchWithHAR(opts FetchOptions) error {
 		}
 
 		_, err = page.Goto(u, pw.PageGotoOptions{
-			WaitUntil: pw.WaitUntilStateNetworkidle,
+			WaitUntil: pw.WaitUntilStateLoad,
 			Timeout:   pw.Float(float64(opts.Timeout.Milliseconds())),
 		})
 		if err != nil {
