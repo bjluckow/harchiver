@@ -8,6 +8,7 @@ import (
 	"time"
 
 	hartype "github.com/bjluckow/harchiver/pkg/har-type"
+	harutil "github.com/bjluckow/harchiver/pkg/har-util"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 )
@@ -44,7 +45,7 @@ func (r *Recorder) onRequest(e *network.EventRequestWillBeSent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	headers := convertHeaders(e.Request.Headers)
+	headers := harutil.ConvertNetworkHeaders(e.Request.Headers)
 	entry := &hartype.Entry{
 		StartedDateTime: e.WallTime.Time().UTC().Format(time.RFC3339Nano),
 		Request: hartype.Request{
@@ -143,14 +144,6 @@ func (r *Recorder) Entries() []hartype.Entry {
 		result[i] = *e
 	}
 	return result
-}
-
-func convertHeaders(h network.Headers) []hartype.Header {
-	out := make([]hartype.Header, 0, len(h))
-	for k, v := range h {
-		out = append(out, hartype.Header{Name: k, Value: v.(string)})
-	}
-	return out
 }
 
 func headerValue(h network.Headers, name string) (string, bool) {
