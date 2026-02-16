@@ -9,6 +9,7 @@ import (
 type LaunchOptions struct {
 	ExecPath string
 	Headless bool
+	Stealth  bool
 }
 
 // Launch starts a local Chrome instance
@@ -21,6 +22,13 @@ func Launch(parent context.Context, opts *LaunchOptions) (*Context, error) {
 
 	if !opts.Headless {
 		cdpOpts = append(cdpOpts, chromedp.Flag("headless", false))
+	}
+
+	if opts.Stealth {
+		cdpOpts = append(cdpOpts,
+			chromedp.Flag("enable-automation", false),
+			chromedp.Flag("disable-blink-features", "AutomationControlled"),
+		)
 	}
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parent, cdpOpts...)
