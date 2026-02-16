@@ -2,6 +2,7 @@ package har
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 )
 
@@ -17,10 +18,8 @@ func Parse(path string) (*HttpArchive, error) {
 	return &archive, nil
 }
 
-func Write(archive *HttpArchive, path string) error {
-	data, err := json.MarshalIndent(archive, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0644)
+func Write(archive *HttpArchive, w io.Writer) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(archive)
 }

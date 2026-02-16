@@ -46,7 +46,7 @@ func (r *Recorder) onRequest(e *network.EventRequestWillBeSent) {
 
 	headers := convertHeaders(e.Request.Headers)
 	entry := &har.Entry{
-		StartedDateTime: e.Timestamp.Time().UTC().Format(time.RFC3339Nano),
+		StartedDateTime: e.WallTime.Time().UTC().Format(time.RFC3339Nano),
 		Request: har.Request{
 			Method:      e.Request.Method,
 			URL:         e.Request.URL,
