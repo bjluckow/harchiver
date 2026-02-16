@@ -7,14 +7,19 @@ import (
 )
 
 type LaunchOptions struct {
-	execPath string
-	headless bool
+	ExecPath string
+	Headless bool
 }
 
 // Launch starts a local Chrome instance
 func Launch(parent context.Context, opts *LaunchOptions) (*Context, error) {
 	cdpOpts := chromedp.DefaultExecAllocatorOptions[:]
-	if !opts.headless {
+
+	if opts.ExecPath != "" {
+		cdpOpts = append(cdpOpts, chromedp.ExecPath(opts.ExecPath))
+	}
+
+	if !opts.Headless {
 		cdpOpts = append(cdpOpts, chromedp.Flag("headless", false))
 	}
 
