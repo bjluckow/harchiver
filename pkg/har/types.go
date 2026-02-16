@@ -7,8 +7,16 @@ type HttpArchive struct {
 	Log Log `json:"log"`
 }
 
+// required by HAR 1.2 spec
+type Creator struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 // Log contains the recorded network activity.
 type Log struct {
+	Creator Creator `json:"creator"`
+	Version string  `json:"version`
 	Entries []Entry `json:"entries"`
 }
 

@@ -1,0 +1,5 @@
+services:
+  chrome:
+    image: chromedp/headless-shell
+    ports:
+      - "9222:9222"
