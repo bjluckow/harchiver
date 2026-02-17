@@ -5,26 +5,19 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/url"
 	"os"
-	"os/signal"
 	"strings"
-	"time"
 
 	"github.com/bjluckow/harchiver/internal/browser"
 	"github.com/bjluckow/harchiver/internal/cdp"
-	harutil "github.com/bjluckow/harchiver/pkg/har-util"
 )
 
 func main() {
 	var (
 		cdpEndpoint = flag.String("cdp", "", "Chrome DevTools Protocol websocket endpoint (connect to running browser)")
-		execPath    = flag.String("exe", "", "Path to a local Chrome installation to launch")
-		headless    = flag.Bool("headless", true, "Run launched browser in headless mode")
-		output      = flag.String("o", "", "Output file (default: stdout)")
-		timeout     = flag.Duration("timeout", 30*time.Second, "Navigation timeout")
+		isolated    = flag.Bool("isolated", false, "Create isolated browser context")
 	)
 	flag.Parse()
 
@@ -33,68 +26,28 @@ func main() {
 		log.Fatalf("url validation: %v", err)
 	}
 
-	var ctx context.Context
-	var cancel context.CancelFunc
-	if len(urls) > 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), *timeout)
-	} else {
-		ctx, cancel = context.WithCancel(context.Background())
-	}
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start browser (if CDP+EXE both provided, try CDP -> fallback EXE)
-	var bc *browser.Context
-
-	if *cdpEndpoint != "" {
-		bc, err = browser.Remote(ctx, *cdpEndpoint)
-		if err != nil && *execPath != "" {
-			log.Printf("CDP connect failed (%v), falling back to local browser", err)
-			bc, err = browser.Launch(ctx, &browser.LaunchOptions{
-				ExecPath: *execPath,
-				Headless: *headless,
-			})
-		}
-	} else if *execPath != "" {
-		bc, err = browser.Launch(ctx, &browser.LaunchOptions{
-			ExecPath: *execPath,
-			Headless: *headless,
-		})
-	} else {
-		log.Fatal("must specify -cdp, -exe, or both")
-	}
+	// Connect to remote browser
+	bc, err := browser.Remote(ctx, *cdpEndpoint)
 	if err != nil {
-		log.Fatalf("browser: %v", err)
+		log.Fatalf("connect: %v", err)
 	}
 	defer bc.Cancel()
 
-	// Create output writer
-	var w io.Writer = os.Stdout
-	if *output != "" {
-		f, err := os.Create(*output)
-		if err != nil {
-			log.Fatalf("create output: %v", err)
+	client := cdp.NewClient(bc.Ctx)
+	if *isolated {
+		if err := client.NewContext(); err != nil {
+			log.Fatalf("new context: %v", err)
 		}
-		defer f.Close()
-		w = f
 	}
+	defer client.Close()
 
-	session := cdp.NewSession(bc.Ctx)
-	if err := session.Start(); err != nil {
-		log.Fatal(err)
-	}
-
-	if len(urls) > 0 {
-		if err := session.Navigate(bc.Ctx, urls); err != nil {
-			log.Fatalf("navigate: %v", err)
+	for _, u := range urls {
+		if err := client.Navigate(u); err != nil {
+			log.Fatalf("navigate %s: %v", u, err)
 		}
-	} else {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, os.Interrupt)
-		<-sigCh
-	}
-
-	if err = harutil.Write(session.HAR(), w); err != nil {
-		log.Fatalf("write HAR: %v", err)
 	}
 }
 

@@ -106,13 +106,3 @@ func (s *Session) HAR() *har.HAR {
 		},
 	}
 }
-
-func (s *Session) Navigate(ctx context.Context, urls []string) error {
-	for _, u := range urls {
-		if err := chromedp.Run(ctx,
-			chromedp.Navigate(u), chromedp.WaitReady("body", chromedp.ByQuery)); err != nil {
-			return fmt.Errorf("navigate %s: %w", u, err)
-		}
-	}
-	return nil
-}
