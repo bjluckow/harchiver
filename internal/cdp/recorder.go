@@ -7,8 +7,7 @@ import (
 	"sync"
 	"time"
 
-	hartype "github.com/bjluckow/harchiver/pkg/har-type"
-	harutil "github.com/bjluckow/harchiver/pkg/har-util"
+	"github.com/chromedp/cdproto/har"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 )
@@ -16,21 +15,36 @@ import (
 // Recorder listens to CDP network events and builds HAR entries
 type Recorder struct {
 	mu       sync.Mutex
-	requests map[network.RequestID]*hartype.Entry
-	entries  []*hartype.Entry
+	requests map[network.RequestID]*har.Entry
+	entries  []*har.Entry
+	pages    map[string]*har.Page
 }
 
 func NewRecorder() *Recorder {
 	return &Recorder{
-		requests: make(map[network.RequestID]*hartype.Entry),
+		requests: make(map[network.RequestID]*har.Entry),
+		pages:    make(map[string]*har.Page),
 	}
 }
 
-func (r *Recorder) Listen(ctx context.Context) {
+func (r *Recorder) registerPage(pageID, title string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.pages[pageID] = &har.Page{
+		ID:              pageID,
+		StartedDateTime: time.Now().UTC().Format(time.RFC3339Nano),
+		Title:           title,
+		PageTimings:     &har.PageTimings{},
+	}
+}
+
+func (r *Recorder) ListenTarget(ctx context.Context, pageID, title string) {
+	r.registerPage(pageID, title)
 	chromedp.ListenTarget(ctx, func(ev any) {
 		switch e := ev.(type) {
 		case *network.EventRequestWillBeSent:
-			r.onRequest(e)
+			r.onRequest(e, pageID)
 		case *network.EventResponseReceived:
 			r.onResponse(e)
 		case *network.EventLoadingFinished:
@@ -41,20 +55,27 @@ func (r *Recorder) Listen(ctx context.Context) {
 	})
 }
 
-func (r *Recorder) onRequest(e *network.EventRequestWillBeSent) {
+func (r *Recorder) onRequest(e *network.EventRequestWillBeSent, pageID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	headers := harutil.ConvertNetworkHeaders(e.Request.Headers)
-	entry := &hartype.Entry{
+	headers := make([]*har.NameValuePair, 0, len(e.Request.Headers))
+	for k, v := range e.Request.Headers {
+		s, _ := v.(string)
+		headers = append(headers, &har.NameValuePair{
+			Name: k, Value: s,
+		})
+	}
+
+	entry := &har.Entry{
 		StartedDateTime: e.WallTime.Time().UTC().Format(time.RFC3339Nano),
-		Request: hartype.Request{
+		Request: &har.Request{
 			Method:      e.Request.Method,
 			URL:         e.Request.URL,
 			HTTPVersion: "HTTP/1.1",
 			Headers:     headers,
 		},
-		Response: hartype.Response{
+		Response: &har.Response{
 			Status: -1, // sentinel until we get the response
 		},
 	}
@@ -66,13 +87,14 @@ func (r *Recorder) onRequest(e *network.EventRequestWillBeSent) {
 		}
 
 		mimeType, _ := headerValue(e.Request.Headers, "content-type")
-		entry.Request.PostData = &hartype.PostData{
+		entry.Request.PostData = &har.PostData{
 			MimeType: mimeType,
 			Text:     text.String(),
 		}
 	}
 
 	r.requests[e.RequestID] = entry
+	entry.Pageref = pageID
 }
 
 func (r *Recorder) onResponse(e *network.EventResponseReceived) {
@@ -84,17 +106,18 @@ func (r *Recorder) onResponse(e *network.EventResponseReceived) {
 		return
 	}
 
-	headers := make([]hartype.Header, 0, len(e.Response.Headers))
+	headers := make([]*har.NameValuePair, 0, len(e.Response.Headers))
 	for k, v := range e.Response.Headers {
-		headers = append(headers, hartype.Header{Name: k, Value: v.(string)})
+		s, _ := v.(string)
+		headers = append(headers, &har.NameValuePair{Name: k, Value: s})
 	}
 
-	entry.Response = hartype.Response{
-		Status:      int(e.Response.Status),
+	entry.Response = &har.Response{
+		Status:      int64(e.Response.Status),
 		StatusText:  e.Response.StatusText,
 		HTTPVersion: e.Response.Protocol,
 		Headers:     headers,
-		Content: &hartype.Content{
+		Content: &har.Content{
 			Size:     int64(e.Response.EncodedDataLength),
 			MimeType: e.Response.MimeType,
 		},
@@ -111,7 +134,7 @@ func (r *Recorder) onLoadingFinished(ctx context.Context, e *network.EventLoadin
 	}
 
 	body, err := network.GetResponseBody(e.RequestID).Do(ctx)
-	if err == nil && entry.Response.Content != nil {
+	if err == nil {
 		entry.Response.Content.Text = base64.StdEncoding.EncodeToString(body)
 		entry.Response.Content.Encoding = "base64"
 	}
@@ -135,11 +158,11 @@ func (r *Recorder) onLoadingFailed(e *network.EventLoadingFailed) {
 }
 
 // Returns collected HAR entries
-func (r *Recorder) Entries() []hartype.Entry {
+func (r *Recorder) Entries() []har.Entry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	result := make([]hartype.Entry, len(r.entries))
+	result := make([]har.Entry, len(r.entries))
 	for i, e := range r.entries {
 		result[i] = *e
 	}
