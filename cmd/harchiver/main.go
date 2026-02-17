@@ -3,18 +3,19 @@ package main
 import (
 	"bufio"
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
 	"time"
 
 	"github.com/bjluckow/harchiver/internal/browser"
-	"github.com/bjluckow/harchiver/internal/capture"
+	"github.com/bjluckow/harchiver/internal/cdp"
+	harutil "github.com/bjluckow/harchiver/pkg/har-util"
 )
 
 func main() {
@@ -27,18 +28,21 @@ func main() {
 	)
 	flag.Parse()
 
-	if *cdpEndpoint == "" && *execPath == "" {
-		log.Fatal("must specify -cdp, -exe, or both")
-	}
-
-	urls, err := parseAndValidateURLs(flag.Args())
+	urls, err := validateURLs(parseURLs(flag.Args()))
 	if err != nil {
 		log.Fatalf("url validation: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if len(urls) > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *timeout)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
 	defer cancel()
 
+	// Start browser (if CDP+EXE both provided, try CDP -> fallback EXE)
 	var bc *browser.Context
 
 	if *cdpEndpoint != "" {
@@ -63,6 +67,7 @@ func main() {
 	}
 	defer bc.Cancel()
 
+	// Create output writer
 	var w io.Writer = os.Stdout
 	if *output != "" {
 		f, err := os.Create(*output)
@@ -73,16 +78,24 @@ func main() {
 		w = f
 	}
 
-	err = capture.Run(bc.Ctx, capture.Options{
-		URLs:    urls,
-		Output:  w,
-		Timeout: *timeout,
-	})
-
-	if err != nil {
-		log.Fatalf("capture: %v", err)
+	session := cdp.NewSession(bc.Ctx)
+	if err := session.Start(); err != nil {
+		log.Fatal(err)
 	}
 
+	if len(urls) > 0 {
+		if err := session.Navigate(bc.Ctx, urls); err != nil {
+			log.Fatalf("navigate: %v", err)
+		}
+	} else {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, os.Interrupt)
+		<-sigCh
+	}
+
+	if err = harutil.Write(session.HAR(), w); err != nil {
+		log.Fatalf("write HAR: %v", err)
+	}
 }
 
 func parseURLs(args []string) []string {
@@ -117,13 +130,4 @@ func validateURLs(urls []string) ([]string, error) {
 		}
 	}
 	return urls, nil
-}
-
-func parseAndValidateURLs(raw []string) ([]string, error) {
-	parsed := parseURLs(raw)
-	if len(parsed) == 0 {
-		return nil, errors.New("no URLs provided")
-	}
-
-	return validateURLs(parsed)
 }

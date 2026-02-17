@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bjluckow/harchiver/pkg/har"
+	"github.com/chromedp/cdproto/har"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 )
@@ -17,19 +17,34 @@ type Recorder struct {
 	mu       sync.Mutex
 	requests map[network.RequestID]*har.Entry
 	entries  []*har.Entry
+	pages    map[string]*har.Page
 }
 
 func NewRecorder() *Recorder {
 	return &Recorder{
 		requests: make(map[network.RequestID]*har.Entry),
+		pages:    make(map[string]*har.Page),
 	}
 }
 
-func (r *Recorder) Listen(ctx context.Context) {
+func (r *Recorder) registerPage(pageID, title string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.pages[pageID] = &har.Page{
+		ID:              pageID,
+		StartedDateTime: time.Now().UTC().Format(time.RFC3339Nano),
+		Title:           title,
+		PageTimings:     &har.PageTimings{},
+	}
+}
+
+func (r *Recorder) ListenTarget(ctx context.Context, pageID string) {
+	r.registerPage(pageID, pageID) // TODO: pass human-readable titles
 	chromedp.ListenTarget(ctx, func(ev any) {
 		switch e := ev.(type) {
 		case *network.EventRequestWillBeSent:
-			r.onRequest(e)
+			r.onRequest(e, pageID)
 		case *network.EventResponseReceived:
 			r.onResponse(e)
 		case *network.EventLoadingFinished:
@@ -40,20 +55,27 @@ func (r *Recorder) Listen(ctx context.Context) {
 	})
 }
 
-func (r *Recorder) onRequest(e *network.EventRequestWillBeSent) {
+func (r *Recorder) onRequest(e *network.EventRequestWillBeSent, pageID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	headers := convertHeaders(e.Request.Headers)
+	headers := make([]*har.NameValuePair, 0, len(e.Request.Headers))
+	for k, v := range e.Request.Headers {
+		s, _ := v.(string)
+		headers = append(headers, &har.NameValuePair{
+			Name: k, Value: s,
+		})
+	}
+
 	entry := &har.Entry{
 		StartedDateTime: e.WallTime.Time().UTC().Format(time.RFC3339Nano),
-		Request: har.Request{
+		Request: &har.Request{
 			Method:      e.Request.Method,
 			URL:         e.Request.URL,
 			HTTPVersion: "HTTP/1.1",
 			Headers:     headers,
 		},
-		Response: har.Response{
+		Response: &har.Response{
 			Status: -1, // sentinel until we get the response
 		},
 	}
@@ -72,6 +94,7 @@ func (r *Recorder) onRequest(e *network.EventRequestWillBeSent) {
 	}
 
 	r.requests[e.RequestID] = entry
+	entry.Pageref = pageID
 }
 
 func (r *Recorder) onResponse(e *network.EventResponseReceived) {
@@ -83,13 +106,14 @@ func (r *Recorder) onResponse(e *network.EventResponseReceived) {
 		return
 	}
 
-	headers := make([]har.Header, 0, len(e.Response.Headers))
+	headers := make([]*har.NameValuePair, 0, len(e.Response.Headers))
 	for k, v := range e.Response.Headers {
-		headers = append(headers, har.Header{Name: k, Value: v.(string)})
+		s, _ := v.(string)
+		headers = append(headers, &har.NameValuePair{Name: k, Value: s})
 	}
 
-	entry.Response = har.Response{
-		Status:      int(e.Response.Status),
+	entry.Response = &har.Response{
+		Status:      int64(e.Response.Status),
 		StatusText:  e.Response.StatusText,
 		HTTPVersion: e.Response.Protocol,
 		Headers:     headers,
@@ -110,7 +134,7 @@ func (r *Recorder) onLoadingFinished(ctx context.Context, e *network.EventLoadin
 	}
 
 	body, err := network.GetResponseBody(e.RequestID).Do(ctx)
-	if err == nil && entry.Response.Content != nil {
+	if err == nil {
 		entry.Response.Content.Text = base64.StdEncoding.EncodeToString(body)
 		entry.Response.Content.Encoding = "base64"
 	}
@@ -145,12 +169,15 @@ func (r *Recorder) Entries() []har.Entry {
 	return result
 }
 
-func convertHeaders(h network.Headers) []har.Header {
-	out := make([]har.Header, 0, len(h))
-	for k, v := range h {
-		out = append(out, har.Header{Name: k, Value: v.(string)})
+func (r *Recorder) Pages() []har.Page {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	result := make([]har.Page, 0, len(r.pages))
+	for _, p := range r.pages {
+		result = append(result, *p)
 	}
-	return out
+	return result
 }
 
 func headerValue(h network.Headers, name string) (string, bool) {
