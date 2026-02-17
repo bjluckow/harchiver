@@ -6,7 +6,7 @@ import (
 	"log"
 	"sync"
 
-	hartype "github.com/bjluckow/harchiver/pkg/har-type"
+	"github.com/chromedp/cdproto/har"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
@@ -94,15 +94,25 @@ func (s *Session) detachTarget(id target.ID) {
 	}
 }
 
-func (s *Session) HAR() *hartype.HttpArchive {
-	return &hartype.HttpArchive{
-		Log: hartype.Log{
+func (s *Session) HAR() *har.HAR {
+	return &har.HAR{
+		Log: &har.Log{
 			Version: "1.2",
-			Creator: hartype.Creator{
+			Creator: &har.Creator{
 				Name:    "harchiver",
 				Version: "1.1.0",
 			},
-			Entries: s.recorder.Entries(),
+			Entries: s.recorder.entries,
 		},
 	}
+}
+
+func (s *Session) Navigate(ctx context.Context, urls []string) error {
+	for _, u := range urls {
+		if err := chromedp.Run(ctx,
+			chromedp.Navigate(u), chromedp.WaitReady("body", chromedp.ByQuery)); err != nil {
+			return fmt.Errorf("navigate %s: %w", u, err)
+		}
+	}
+	return nil
 }

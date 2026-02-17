@@ -39,8 +39,8 @@ func (r *Recorder) registerPage(pageID, title string) {
 	}
 }
 
-func (r *Recorder) ListenTarget(ctx context.Context, pageID, title string) {
-	r.registerPage(pageID, title)
+func (r *Recorder) ListenTarget(ctx context.Context, pageID string) {
+	r.registerPage(pageID, pageID) // TODO: pass human-readable titles
 	chromedp.ListenTarget(ctx, func(ev any) {
 		switch e := ev.(type) {
 		case *network.EventRequestWillBeSent:
@@ -165,6 +165,17 @@ func (r *Recorder) Entries() []har.Entry {
 	result := make([]har.Entry, len(r.entries))
 	for i, e := range r.entries {
 		result[i] = *e
+	}
+	return result
+}
+
+func (r *Recorder) Pages() []har.Page {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	result := make([]har.Page, 0, len(r.pages))
+	for _, p := range r.pages {
+		result = append(result, *p)
 	}
 	return result
 }

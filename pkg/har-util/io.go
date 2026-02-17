@@ -5,22 +5,22 @@ import (
 	"io"
 	"os"
 
-	hartype "github.com/bjluckow/harchiver/pkg/har-type"
+	"github.com/chromedp/cdproto/har"
 )
 
-func Parse(path string) (*hartype.HttpArchive, error) {
+func Parse(path string) (*har.HAR, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var archive hartype.HttpArchive
+	var archive har.HAR
 	if err := json.Unmarshal(data, &archive); err != nil {
 		return nil, err
 	}
 	return &archive, nil
 }
 
-func Write(archive *hartype.HttpArchive, w io.Writer) error {
+func Write(archive *har.HAR, w io.Writer) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(archive)
