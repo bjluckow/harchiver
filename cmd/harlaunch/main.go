@@ -17,6 +17,7 @@ func main() {
 		port        = flag.Int("port", 9222, "Chrome remote debugging port")
 		headless    = flag.Bool("headless", false, "Run Chrome in headless mode")
 		timeout     = flag.Duration("timeout", 0, "Auto-shutdown after duration (0 = never)")
+		detach      = flag.String("detach", "", "Start and exit. Output: 'pid', 'ws', or 'both'")
 		doPrintArgs = flag.Bool("output-args", false, "Output Chrome launch arguments and exit")
 	)
 	flag.Parse()
@@ -48,6 +49,24 @@ func main() {
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt)
+
+	if *detach != "" && *timeout > 0 {
+		log.Fatal("-detach and -timeout cannot be used together")
+	}
+
+	if *detach != "" {
+		switch *detach {
+		case "pid":
+			fmt.Println(inst.Cmd.Process.Pid)
+		case "ws":
+			fmt.Println(inst.Endpoint())
+		case "both":
+			fmt.Printf("%d %s\n", inst.Cmd.Process.Pid, inst.Endpoint())
+		default:
+			log.Fatalf("invalid -detach value: %s (use pid, ws, or both)", *detach)
+		}
+		os.Exit(0)
+	}
 
 	if *timeout > 0 {
 		fmt.Fprintf(os.Stderr, "Timeout: %s\n", timeout.String())
