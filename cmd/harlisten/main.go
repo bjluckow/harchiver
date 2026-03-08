@@ -10,7 +10,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/bjluckow/harchiver/internal/cdp"
+	cdputil "github.com/bjluckow/harchiver/pkg/cdputil"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 	flag.Parse()
 
 	if *compat {
-		_, cancel, err := cdp.Connect(context.Background(), *cdpEndpoint)
+		_, cancel, err := cdputil.Connect(context.Background(), *cdpEndpoint)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -36,7 +36,7 @@ func main() {
 		log.Fatal("-cdp <endpoint> is required")
 	}
 
-	ctx, cancel, err := cdp.Connect(context.Background(), *cdpEndpoint)
+	ctx, cancel, err := cdputil.Connect(context.Background(), *cdpEndpoint)
 	if err != nil {
 		log.Fatalf("connect: %v", err)
 	}
@@ -53,7 +53,7 @@ func main() {
 		w = f
 	}
 
-	session := cdp.NewSession(ctx)
+	session := cdputil.NewSession(ctx)
 	if err := session.Start(); err != nil {
 		log.Fatal(err)
 	}

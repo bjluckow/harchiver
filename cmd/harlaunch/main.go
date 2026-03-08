@@ -60,7 +60,7 @@ func main() {
 			fmt.Println(inst.Cmd.Process.Pid)
 		case "ws":
 			fmt.Println(inst.Endpoint())
-		case "both":
+		case "both", "all":
 			fmt.Printf("%d %s\n", inst.Cmd.Process.Pid, inst.Endpoint())
 		default:
 			log.Fatalf("invalid -detach value: %s (use pid, ws, or both)", *detach)

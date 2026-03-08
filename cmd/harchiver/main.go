@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/bjluckow/harchiver/internal/browser"
-	"github.com/bjluckow/harchiver/internal/cdp"
+	"github.com/bjluckow/harchiver/pkg/cdputil"
 
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
@@ -57,7 +57,7 @@ func main() {
 	}
 
 	// Connect
-	ctx, cancel, err := cdp.Connect(context.Background(), endpoint)
+	ctx, cancel, err := cdputil.Connect(context.Background(), endpoint)
 	if err != nil {
 		log.Fatalf("connect: %v", err)
 	}
@@ -74,7 +74,7 @@ func main() {
 	targetID := chromedp.FromContext(tabCtx).Target.TargetID
 
 	// Record only this target
-	rec := cdp.NewRecorder()
+	rec := cdputil.NewRecorder()
 	rec.ListenTarget(tabCtx, string(targetID))
 
 	if err := chromedp.Run(tabCtx, network.Enable()); err != nil {
