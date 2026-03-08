@@ -1,4 +1,4 @@
-package cdp
+package cdputil
 
 import (
 	"context"
