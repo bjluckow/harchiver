@@ -68,7 +68,7 @@ func main() {
 			case <-ticker.C:
 				elapsed := time.Since(startTime).Truncate(time.Second)
 				remaining := time.Until(startTime.Add(*timeout)).Truncate(time.Second)
-				fmt.Fprintf(os.Stderr, "%s elapsed | %s remaining \n", elapsed, remaining)
+				fmt.Fprintf(os.Stderr, "Timeout: %s elapsed | %s remaining \n", elapsed, remaining)
 			}
 		}
 
