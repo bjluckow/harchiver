@@ -95,16 +95,7 @@ func (s *Session) detachTarget(id target.ID) {
 }
 
 func (s *Session) HAR() *har.HAR {
-	return &har.HAR{
-		Log: &har.Log{
-			Version: "1.2",
-			Creator: &har.Creator{
-				Name:    "harchiver",
-				Version: "1.1.0",
-			},
-			Entries: s.recorder.entries,
-		},
-	}
+	return s.recorder.HAR()
 }
 
 func (s *Session) Navigate(ctx context.Context, urls []string) error {

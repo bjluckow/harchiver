@@ -157,27 +157,41 @@ func (r *Recorder) onLoadingFailed(e *network.EventLoadingFailed) {
 	}
 }
 
-// Returns collected HAR entries
-func (r *Recorder) Entries() []har.Entry {
+func (r *Recorder) Entries() []*har.Entry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	result := make([]har.Entry, len(r.entries))
+	result := make([]*har.Entry, len(r.entries))
 	for i, e := range r.entries {
-		result[i] = *e
+		result[i] = e
 	}
 	return result
 }
 
-func (r *Recorder) Pages() []har.Page {
+func (r *Recorder) Pages() []*har.Page {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	result := make([]har.Page, 0, len(r.pages))
+	result := make([]*har.Page, 0, len(r.pages))
 	for _, p := range r.pages {
-		result = append(result, *p)
+		result = append(result, p)
 	}
 	return result
+}
+
+func (r *Recorder) HAR() *har.HAR {
+
+	return &har.HAR{
+		Log: &har.Log{
+			Version: "1.2",
+			Creator: &har.Creator{
+				Name:    "harchiver",
+				Version: "0.1.0",
+			},
+			Pages:   r.Pages(),
+			Entries: r.Entries(),
+		},
+	}
 }
 
 func headerValue(h network.Headers, name string) (string, bool) {

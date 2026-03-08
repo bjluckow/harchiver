@@ -4,17 +4,20 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
-	"os/exec"
 	"os/signal"
+	"time"
+
+	"github.com/bjluckow/harchiver/internal/browser"
 )
 
 func main() {
 	var (
-		execPath = flag.String("exe", "", "Path to Chrome/Chromium executable")
-		port     = flag.Int("port", 9222, "Remote debugging port")
-		headless = flag.Bool("headless", false, "Run headless")
+		execPath    = flag.String("exe", "", "Path to Chrome/Chromium executable")
+		port        = flag.Int("port", 9222, "Chrome remote debugging port")
+		headless    = flag.Bool("headless", false, "Run Chrome in headless mode")
+		timeout     = flag.Duration("timeout", 0, "Auto-shutdown after duration (0 = never)")
+		doPrintArgs = flag.Bool("output-args", false, "Output Chrome launch arguments and exit")
 	)
 	flag.Parse()
 
@@ -22,45 +25,57 @@ func main() {
 		log.Fatal("-exe is required")
 	}
 
-	// Check if port is already in use
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	options := &browser.LaunchOptions{
+		ExecPath:  *execPath,
+		Port:      *port,
+		Headless:  *headless,
+		ExtraArgs: flag.Args(),
+	}
+
+	if *doPrintArgs {
+		fmt.Println(options)
+		os.Exit(0)
+	}
+
+	inst, err := browser.Launch(options)
 	if err != nil {
-		log.Fatalf("port %d already in use", *port)
-	}
-	ln.Close()
-
-	args := []string{
-		fmt.Sprintf("--remote-debugging-port=%d", *port),
-		"--no-first-run",
-		"--no-default-browser-check",
+		log.Fatalf("launch: %v", err)
 	}
 
-	if *headless {
-		args = append(args, "--headless=new")
-	}
-
-	// Append any extra args after --
-	args = append(args, flag.Args()...)
-
-	cmd := exec.Command(*execPath, args...)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		log.Fatalf("start chrome: %v", err)
-	}
-
-	fmt.Fprintf(os.Stderr, "Chrome started (PID %d)\n", cmd.Process.Pid)
-	fmt.Fprintf(os.Stderr, "CDP endpoint: ws://127.0.0.1:%d/\n", *port)
-
-	// Also print just the endpoint to stdout for piping
-	fmt.Printf("ws://127.0.0.1:%d/\n", *port)
+	fmt.Fprintf(os.Stderr, "Chrome started (PID %d)\n", inst.Cmd.Process.Pid)
+	fmt.Fprintf(os.Stderr, "CDP endpoint: %s\n", inst.Endpoint())
+	fmt.Println(inst.Endpoint())
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt)
-	<-sigCh
+
+	if *timeout > 0 {
+		fmt.Fprintf(os.Stderr, "Timeout: %s\n", timeout.String())
+		startTime := time.Now()
+
+		timer := time.After(*timeout)
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+	loop:
+		for {
+			select {
+			case <-sigCh:
+				break loop
+			case <-timer:
+				fmt.Fprintln(os.Stderr, "Timeout reached")
+				break loop
+			case <-ticker.C:
+				elapsed := time.Since(startTime).Truncate(time.Second)
+				remaining := time.Until(startTime.Add(*timeout)).Truncate(time.Second)
+				fmt.Fprintf(os.Stderr, "%s elapsed | %s remaining \n", elapsed, remaining)
+			}
+		}
+
+	} else {
+		<-sigCh
+	}
 
 	fmt.Fprintln(os.Stderr, "Shutting down Chrome...")
-	cmd.Process.Signal(os.Interrupt)
-	cmd.Wait()
+	inst.Stop()
 }
